@@ -1,9 +1,20 @@
-from .base import LLMProvider, LLMResult
+from typing import Any, Dict, List, Optional
+from app.providers.base import BaseLLMProvider
 
-class MockProvider(LLMProvider):
-    name = "mock"
-
-    async def generate(self, prompt: str, model: str) -> LLMResult:
-        # Very simple placeholder so the whole system works end-to-end
-        out = f"[MOCK:{model}] {prompt[:400]}"
-        return LLMResult(output=out, input_tokens=len(prompt)//4, output_tokens=len(out)//4)
+class MockProvider(BaseLLMProvider):
+    async def generate(
+        self,
+        messages: List[Dict[str, str]],
+        model: str,
+        temperature: float,
+        max_tokens: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        last = messages[-1]["content"]
+        return {
+            "text": f"[MOCK] model={model} temp={temperature} :: {last}",
+            "usage": {
+                "input_tokens": len(last.split()),
+                "output_tokens": 12
+            },
+            "raw": None
+        }

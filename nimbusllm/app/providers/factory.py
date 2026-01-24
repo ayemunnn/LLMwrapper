@@ -1,10 +1,10 @@
-import os
-from .base import LLMProvider
-from .mock import MockProvider
+from app.providers.mock import MockProvider
 
-def get_provider() -> LLMProvider:
-    provider = os.getenv("LLM_PROVIDER", "mock").lower()
-    if provider == "mock":
+def get_provider(name: str):
+    name = (name or "").lower().strip()
+
+    if name == "mock":
         return MockProvider()
-    # later: gemini/openai adapters here
-    return MockProvider()
+
+    # We'll add openai/gemini next
+    raise ValueError(f"Unsupported provider: {name}")

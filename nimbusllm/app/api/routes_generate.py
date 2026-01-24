@@ -1,60 +1,82 @@
 import time
 import uuid
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-from typing import List, Literal, Optional, Dict, Any
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 
+from app.db.deps import get_db
+from app.db.models import LLMRequestLog
 from app.providers.factory import get_provider
-
-router = APIRouter()
-
-Role = Literal["system", "user", "assistant"]
-
-class Message(BaseModel):
-    role: Role
-    content: str = Field(min_length=1)
-
-class GenerateRequest(BaseModel):
-    provider: str = Field(min_length=1)
-    model: str = Field(min_length=1)
-    messages: List[Message] = Field(min_length=1)
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: Optional[int] = Field(default=None, ge=1, le=8192)
-
-class GenerateResponse(BaseModel):
-    id: str
-    provider: str
-    model: str
-    text: str
-    usage: Dict[str, int]
-    latency_ms: int
-    raw: Optional[Any] = None
+# (keep your Pydantic models as-is)
 
 @router.post("/generate", response_model=GenerateResponse)
-async def generate(req: GenerateRequest):
+async def generate(req: GenerateRequest, db: Session = Depends(get_db)):
     start = time.time()
     request_id = f"req_{uuid.uuid4().hex[:12]}"
+    provider_name = req.provider.lower().strip()
 
     try:
-        provider = get_provider(req.provider)
+        provider = get_provider(provider_name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    result = await provider.generate(
-        messages=[m.model_dump() for m in req.messages],
-        model=req.model,
-        temperature=req.temperature,
-        max_tokens=req.max_tokens,
-    )
+    prompt_text = req.messages[-1].content  # simple v1: last user message only
 
-    latency_ms = int((time.time() - start) * 1000)
+    try:
+        result = await provider.generate(
+            messages=[m.model_dump() for m in req.messages],
+            model=req.model,
+            temperature=req.temperature,
+            max_tokens=req.max_tokens,
+        )
+        latency_ms = int((time.time() - start) * 1000)
 
-    return GenerateResponse(
-        id=request_id,
-        provider=req.provider.lower(),
-        model=req.model,
-        text=result["text"],
-        usage=result.get("usage", {"input_tokens": 0, "output_tokens": 0}),
-        latency_ms=latency_ms,
-        raw=result.get("raw"),
-    )
+        usage = result.get("usage", {"input_tokens": 0, "output_tokens": 0})
+        text = result["text"]
+
+        db.add(
+            LLMRequestLog(
+                request_id=request_id,
+                provider=provider_name,
+                model=req.model,
+                prompt=prompt_text,
+                response_text=text,
+                input_tokens=int(usage.get("input_tokens", 0)),
+                output_tokens=int(usage.get("output_tokens", 0)),
+                latency_ms=latency_ms,
+                status="success",
+                error=None,
+            )
+        )
+        db.commit()
+
+        return GenerateResponse(
+            id=request_id,
+            provider=provider_name,
+            model=req.model,
+            text=text,
+            usage={"input_tokens": int(usage.get("input_tokens", 0)), "output_tokens": int(usage.get("output_tokens", 0))},
+            latency_ms=latency_ms,
+            raw=result.get("raw"),
+        )
+
+    except Exception as e:
+        latency_ms = int((time.time() - start) * 1000)
+
+        # best effort log failure
+        db.add(
+            LLMRequestLog(
+                request_id=request_id,
+                provider=provider_name,
+                model=req.model,
+                prompt=prompt_text,
+                response_text="",
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=latency_ms,
+                status="fail",
+                error=str(e),
+            )
+        )
+        db.commit()
+
+        raise HTTPException(status_code=500, detail="Provider call failed")

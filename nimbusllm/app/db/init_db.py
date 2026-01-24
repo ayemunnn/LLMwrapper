@@ -1,5 +1,5 @@
-from .session import engine, Base
-from . import models  # noqa: F401
+from app.db.session import engine, Base
+from app.db import models  # noqa: F401 (ensures models are registered)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
