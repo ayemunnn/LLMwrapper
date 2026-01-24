@@ -1,14 +1,31 @@
 services:
   db:
     image: postgres:16
+    container_name: nimbusllm_db
     environment:
-      POSTGRES_DB: nimbus
       POSTGRES_USER: nimbus
-      POSTGRES_PASSWORD: nimbuspass
+      POSTGRES_PASSWORD: nimbus
+      POSTGRES_DB: nimbusllm
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nimbus -d nimbusllm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    container_name: nimbusllm_api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:

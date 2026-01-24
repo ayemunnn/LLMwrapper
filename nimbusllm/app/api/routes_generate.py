@@ -1,63 +1,60 @@
-import time, uuid
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-from app.core.auth import require_api_key
+import time
+import uuid
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+from typing import List, Literal, Optional, Dict, Any
+
 from app.providers.factory import get_provider
-from app.db.session import SessionLocal
-from app.db.models import RequestLog
 
 router = APIRouter()
 
+Role = Literal["system", "user", "assistant"]
+
+class Message(BaseModel):
+    role: Role
+    content: str = Field(min_length=1)
+
 class GenerateRequest(BaseModel):
-    task: str
-    input: str
-    model: str = "default"
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    messages: List[Message] = Field(min_length=1)
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: Optional[int] = Field(default=None, ge=1, le=8192)
 
 class GenerateResponse(BaseModel):
-    request_id: str
-    output: str
+    id: str
+    provider: str
+    model: str
+    text: str
+    usage: Dict[str, int]
     latency_ms: int
-    usage: dict
+    raw: Optional[Any] = None
 
-@router.post("/v1/generate", response_model=GenerateResponse)
-async def generate(req: GenerateRequest, api_key: str = Depends(require_api_key)):
-    request_id = uuid.uuid4().hex
-    t0 = time.perf_counter()
-
-    provider = get_provider()
-    status = "ok"
-    err = None
+@router.post("/generate", response_model=GenerateResponse)
+async def generate(req: GenerateRequest):
+    start = time.time()
+    request_id = f"req_{uuid.uuid4().hex[:12]}"
 
     try:
-        # v1 prompt: simple template (later swap to YAML prompt registry)
-        prompt = f"Task: {req.task}\n\nInput:\n{req.input}"
-        result = await provider.generate(prompt=prompt, model=req.model)
-    except Exception as e:
-        status = "error"
-        err = str(e)
-        raise
-    finally:
-        latency_ms = int((time.perf_counter() - t0) * 1000)
-        # write telemetry
-        db = SessionLocal()
-        try:
-            db.add(RequestLog(
-                request_id=request_id,
-                api_key=api_key,
-                provider=provider.name,
-                model=req.model,
-                input_chars=len(req.input),
-                latency_ms=latency_ms,
-                status=status,
-                error=err
-            ))
-            db.commit()
-        finally:
-            db.close()
+        provider = get_provider(req.provider)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    result = await provider.generate(
+        messages=[m.model_dump() for m in req.messages],
+        model=req.model,
+        temperature=req.temperature,
+        max_tokens=req.max_tokens,
+    )
+
+    latency_ms = int((time.time() - start) * 1000)
 
     return GenerateResponse(
-        request_id=request_id,
-        output=result.output,
+        id=request_id,
+        provider=req.provider.lower(),
+        model=req.model,
+        text=result["text"],
+        usage=result.get("usage", {"input_tokens": 0, "output_tokens": 0}),
         latency_ms=latency_ms,
-        usage={"input_tokens": result.input_tokens, "output_tokens": result.output_tokens}
+        raw=result.get("raw"),
     )
