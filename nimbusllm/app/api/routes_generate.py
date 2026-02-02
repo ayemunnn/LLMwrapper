@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 from app.db.deps import get_db
 from app.db.models import LLMRequestLog
 from app.providers.factory import get_provider
-# (keep your Pydantic models as-is)
+
+# ✅ add your Pydantic model imports (adjust path as needed)
+from app.schemas.generate import GenerateRequest, GenerateResponse  # example
+
+# ✅ THIS is what you're missing
+router = APIRouter()
 
 @router.post("/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest, db: Session = Depends(get_db)):
@@ -54,7 +59,10 @@ async def generate(req: GenerateRequest, db: Session = Depends(get_db)):
             provider=provider_name,
             model=req.model,
             text=text,
-            usage={"input_tokens": int(usage.get("input_tokens", 0)), "output_tokens": int(usage.get("output_tokens", 0))},
+            usage={
+                "input_tokens": int(usage.get("input_tokens", 0)),
+                "output_tokens": int(usage.get("output_tokens", 0)),
+            },
             latency_ms=latency_ms,
             raw=result.get("raw"),
         )
@@ -62,7 +70,6 @@ async def generate(req: GenerateRequest, db: Session = Depends(get_db)):
     except Exception as e:
         latency_ms = int((time.time() - start) * 1000)
 
-        # best effort log failure
         db.add(
             LLMRequestLog(
                 request_id=request_id,
