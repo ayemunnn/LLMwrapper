@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 from app.db.deps import get_db
 from app.db.models import LLMRequestLog
 from app.providers.factory import get_provider
+from app.schemas.generate import GenerateRequest, GenerateResponse
+router = APIRouter()
+
 
 # ✅ add your Pydantic model imports (adjust path as needed)
 from app.schemas.generate import GenerateRequest, GenerateResponse  # example
