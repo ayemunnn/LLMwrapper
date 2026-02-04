@@ -9,13 +9,6 @@ from app.providers.factory import get_provider
 from app.schemas.generate import GenerateRequest, GenerateResponse
 router = APIRouter()
 
-
-# ✅ add your Pydantic model imports (adjust path as needed)
-from app.schemas.generate import GenerateRequest, GenerateResponse  # example
-
-# ✅ THIS is what you're missing
-router = APIRouter()
-
 @router.post("/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest, db: Session = Depends(get_db)):
     start = time.time()
