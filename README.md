@@ -32,24 +32,27 @@ All `/generate` requests are logged with:
 ---
 
 ## Project Structure
+## Project Structure
+
+```text
 nimbusllm/
 ├─ app/
-│ ├─ api/
-│ │ ├─ routes_generate.py
-│ │ └─ routes_health.py
-│ ├─ core/
-│ │ └─ auth.py
-│ ├─ db/
-│ │ ├─ deps.py
-│ │ ├─ init_db.py
-│ │ ├─ models.py
-│ │ └─ session.py
-│ ├─ providers/
-│ │ ├─ base.py
-│ │ ├─ factory.py
-│ │ └─ mock.py
-│ ├─ init.py
-│ └─ main.py
+│  ├─ api/
+│  │  ├─ routes_generate.py
+│  │  └─ routes_health.py
+│  ├─ core/
+│  │  └─ auth.py
+│  ├─ db/
+│  │  ├─ deps.py
+│  │  ├─ init_db.py
+│  │  ├─ models.py
+│  │  └─ session.py
+│  ├─ providers/
+│  │  ├─ base.py
+│  │  ├─ factory.py
+│  │  └─ mock.py
+│  ├─ __init__.py
+│  └─ main.py
 ├─ docker-compose.yml
 ├─ Dockerfile
 ├─ requirements.txt
