@@ -32,8 +32,6 @@ All `/generate` requests are logged with:
 ---
 
 ## Project Structure
-## Project Structure
-
 ```text
 nimbusllm/
 ├─ app/
